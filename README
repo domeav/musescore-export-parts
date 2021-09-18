@@ -1,0 +1,3 @@
+Utility script to export and transpose all parts of a mscz file (written in concert key) for instruments in C (no transposition) Bb, Eb.
+
+Files in plugins must be copied to ~/MuseScore3/Plugins/
