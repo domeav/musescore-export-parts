@@ -30,6 +30,23 @@ for part, content in zip(result['parts'], result['partsBin']):
     filepath_C_pdf = f"C/{ part.replace(' ', '_') }_C.pdf"
     subprocess.run([MUSE_APP, filepath_C, '-o', filepath_C_pdf], capture_output=False)    
 
+    # C bass Clef
+    filepath_C_bassClef = f"C/{ part.replace(' ', '_') }_C_bassClef.mscx"
+    out = subprocess.run(['unzip', '-p', filepath_C, '*.msc*'], capture_output=True)
+    bassClef = 'F15ma'
+    if part.lower().startswith('bass'):
+        bassClef = 'F8va'
+    c_bass_file = out.stdout.decode('utf-8')
+    if 'transposingClefType' in c_bass_file:
+        c_bass_file = c_bass_file.replace('<transposingClefType>G</transposingClefType>', f'<transposingClefType>{ bassClef }</transposingClefType>')
+    else:
+        c_bass_file = c_bass_file.replace('<voice>', f'<voice><Clef><concertClefType>G</concertClefType><transposingClefType>{ bassClef }</transposingClefType></Clef>', 1)
+    with open(filepath_C_bassClef, 'w') as outfile:
+        print('Writing', filepath_C_bassClef)
+        outfile.write(c_bass_file)
+    filepath_C_bassClef_pdf = f"C/{ part.replace(' ', '_') }_C_bassClef.pdf"
+    subprocess.run([MUSE_APP, filepath_C_bassClef, '-o', filepath_C_bassClef_pdf], capture_output=False)
+
     # Bb
     transposeConfig = '{"mode": "by_interval", "direction": "up", "transposeInterval": 4, "transposeKeySignatures": true}'
     out = subprocess.run([MUSE_APP, filepath_C, '--score-transpose', transposeConfig], capture_output=True)
@@ -52,4 +69,4 @@ for part, content in zip(result['parts'], result['partsBin']):
     filepath_Eb_pdf = f"Eb/{ part.replace(' ', '_') }_Eb.pdf"
     subprocess.run([MUSE_APP, filepath_Eb, '-o', filepath_Eb_pdf, '-p', 'tag_Eb.qml'], capture_output=False)
     
-    subprocess.run(['rm', filepath_C, filepath_Bb, filepath_Eb])
+    subprocess.run(['rm', filepath_C, filepath_C_bassClef, filepath_Bb, filepath_Eb])
