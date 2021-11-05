@@ -21,7 +21,13 @@ keys = ("C", "Bb", "Eb")
 print("Creating output folders")
 subprocess.run(["mkdir", "-p", *keys])
 
-print("Executing MuseScore...")
+print("Generating conductor...")
+subprocess.run(
+    [MUSE_APP, args.musescore_file, "-o", "C/conductor.pdf"],
+    capture_output=False,
+)
+
+print("Fetching parts...")
 out = subprocess.run(
     [MUSE_APP, args.musescore_file, "--score-parts"], capture_output=True
 )
