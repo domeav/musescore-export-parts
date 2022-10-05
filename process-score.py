@@ -5,6 +5,7 @@ import json
 import base64
 import subprocess
 import argparse
+import re
 
 # Inspired from https://musescore.org/en/node/287888
 
@@ -17,128 +18,98 @@ args = parser.parse_args()
 MUSE_APP = "/home/dom/Apps/MuseScore-3.6.2.548021370-x86_64.AppImage"
 
 keys = ("C", "Bb", "Eb")
+CLEF_TABLE = ['15mb', '8vb', '', '8va', '15ma']
 
-print("Creating output folders")
+
+print("\n### Creating output folders")
 subprocess.run(["mkdir", "-p", *keys])
 
-print("Generating conductor...")
-subprocess.run(
-    [MUSE_APP, args.musescore_file, "-o", "C/conductor.pdf"],
-    capture_output=False,
-)
-
-print("Fetching parts...")
-out = subprocess.run(
-    [MUSE_APP, args.musescore_file, "--score-parts"], capture_output=True
-)
-print(out.stderr.decode("utf-8"))
-result = json.loads(out.stdout)
-for part, content in zip(result["parts"], result["partsBin"]):
-
-    part = part.replace(" ", "_")
-    filepath_C_mscz = f"C/tmp_{part}_C.mscz"
-    with open(filepath_C_mscz, "wb") as outfile:
-        print("Writing", filepath_C_mscz)
+print("\n### Transposing conductors...")
+for key in keys:
+    if key == "C":
+        subprocess.run(["cp", args.musescore_file, "C/tmp_conductor.mscz"], capture_output=False)
+        continue
+    elif key == "Bb":
+        transposeConfig = '{"mode": "by_interval", "direction": "up", "transposeInterval": 4, "transposeKeySignatures": true}'
+    elif key == "Eb":
+        transposeConfig = '{"mode": "by_interval", "direction": "down", "transposeInterval": 7, "transposeKeySignatures": true}'
+    else:
+        raise Exception(f"Unknown key [{key}]?!?")
+    out = subprocess.run(
+        [MUSE_APP, args.musescore_file, "--score-transpose", transposeConfig],
+        capture_output=True,
+    )    
+    content = json.loads(out.stdout)["mscz"]
+    with open(f"{key}/tmp_conductor.mscz", "wb") as outfile:
         outfile.write(base64.b64decode(content))
 
-    for key in keys:
-        if key == "C":
-            filepath_mscz = filepath_C_mscz
-        else:
-            if key == "Bb":
-                transposeConfig = '{"mode": "by_interval", "direction": "up", "transposeInterval": 4, "transposeKeySignatures": true}'
-            elif key == "Eb":
-                transposeConfig = '{"mode": "by_interval", "direction": "down", "transposeInterval": 7, "transposeKeySignatures": true}'
-            else:
-                raise Exception(f"Unknown key [{key}]?!?")
-            out = subprocess.run(
-                [MUSE_APP, filepath_C_mscz, "--score-transpose", transposeConfig],
-                capture_output=True,
-            )
-            content = json.loads(out.stdout)["mscz"]
-            filepath_mscz = f"{key}/tmp_{part}_{key}.mscz"
-            with open(filepath_mscz, "wb") as outfile:
-                print("Writing", filepath_mscz)
-                outfile.write(base64.b64decode(content))
+print("\n### Generating conductors scores...")
+for key in keys:
+    subprocess.run(
+        [MUSE_APP, f"{key}/tmp_conductor.mscz", "-o", f"{key}/conductor.pdf"],
+        capture_output=False,
+   )
 
-        # direct PDF
-        filepath_direct = f"{key}/{part}_{key}.pdf"
-        subprocess.run(
-            [MUSE_APP, filepath_mscz, "-o", filepath_direct, "-p", f"tag_{key}.qml"],
-            capture_output=False,
+def _generate_pdf(contents, target_file, key):
+    'Generate normal and pocket pdfs from in-memory mscx'
+    with open(f"tmp.mscx", "w") as outfile:
+            outfile.write(mscx_contents)
+    subprocess.run(
+        [MUSE_APP, "tmp.mscx", "-o", f'{target_file}.pdf', "-p", f"tag_{key}.qml"],
+        capture_output=False,
+    )
+    # pocket version
+    pocket_mscx = re.sub('<Spatium>[^<]+</Spatium>', '<Spatium>2.9</Spatium>', mscx_contents)
+    with open(f"tmp.mscx", "w") as outfile:
+            outfile.write(pocket_mscx)
+    subprocess.run(
+        [MUSE_APP, "tmp.mscx", "-o", f'{target_file}_pocket.pdf', "-p", f"tag_{key}.qml"],
+        capture_output=False,
+    )
+
+    
+print("Fetching parts...")
+for key in keys:
+    out = subprocess.run(
+        [MUSE_APP, f"{key}/tmp_conductor.mscz", "--score-parts"], capture_output=True
+    )
+    print(out.stderr.decode("utf-8"))
+    result = json.loads(out.stdout)
+    for part, content in zip(result["parts"], result["partsBin"]):
+        part = part.replace(" ", "_")
+        with open(f"{key}/tmp_{part}.mscz", "wb") as outfile:
+            outfile.write(base64.b64decode(content))
+        out = subprocess.run(
+            ["unzip", "-p", f"{key}/tmp_{part}.mscz", "*.msc*"], capture_output=True
         )
-
-        if part.lower().startswith("bass"):
-            # treble Clef, for people who can't read bass key
-            filepath_trebleClef = f"{key}/tmp_{part}_{key}_trebleClef.mscx"
-            out = subprocess.run(
-                ["unzip", "-p", filepath_mscz, "*.msc*"], capture_output=True
-            )
-            treble_file = out.stdout.decode("utf-8")
-            if key == "Eb":
-                transposingClefType = "G15mb"
-            else:
-                transposingClefType = "G8vb"
-            if "transposingClefType" in treble_file:
-                treble_file = treble_file.replace(
-                    "<transposingClefType>F</transposingClefType>",
-                    f"<transposingClefType>{transposingClefType}</transposingClefType>",
-                )
-            else:
-                treble_file = treble_file.replace(
-                    "<voice>",
-                    f"<voice><Clef><concertClefType>F</concertClefType><transposingClefType>{transposingClefType}</transposingClefType></Clef>",
-                    1,
-                )
-            with open(filepath_trebleClef, "w") as outfile:
-                print("Writing", filepath_trebleClef)
-                outfile.write(treble_file)
-            filepath_trebleClef_pdf = f"{key}/{part}_{key}_trebleClef.pdf"
-            subprocess.run(
-                [
-                    MUSE_APP,
-                    filepath_trebleClef,
-                    "-o",
-                    filepath_trebleClef_pdf,
-                    "-p",
-                    f"tag_{key}.qml",
-                ],
-                capture_output=False,
-            )
-
+        mscx_contents = out.stdout.decode("utf-8")
+        m = re.search('<transposingClefType>([^<]+)</transposingClefType>', mscx_contents)
+        if m:
+            clef, qualifier = m.group(1)[0], m.group(1)[1:]
         else:
-            # bass Clef, for trombone
-            filepath_bassClef = f"{key}/tmp_{part}_{key}_bassClef.mscx"
-            out = subprocess.run(
-                ["unzip", "-p", filepath_mscz, "*.msc*"], capture_output=True
-            )
-            bass_file = out.stdout.decode("utf-8")
-            if "transposingClefType" in bass_file:
-                bass_file = bass_file.replace(
-                    "<transposingClefType>G</transposingClefType>",
-                    f"<transposingClefType>F15ma</transposingClefType>",
-                )
-            else:
-                bass_file = bass_file.replace(
-                    "<voice>",
-                    f"<voice><Clef><concertClefType>G</concertClefType><transposingClefType>F15ma</transposingClefType></Clef>",
-                    1,
-                )
-            with open(filepath_bassClef, "w") as outfile:
-                print("Writing", filepath_bassClef)
-                outfile.write(bass_file)
-            filepath_bassClef_pdf = f"{key}/{part}_{key}_bassClef.pdf"
-            subprocess.run(
-                [
-                    MUSE_APP,
-                    filepath_bassClef,
-                    "-o",
-                    filepath_bassClef_pdf,
-                    "-p",
-                    f"tag_{key}.qml",
-                ],
-                capture_output=False,
-            )
+            clef = 'G'
+        clef_qualifier_index = CLEF_TABLE.index(clef[1:])
+        _generate_pdf(mscx_contents, f"{key}/{part}_{clef}", key)
+        # switch clef
+        if clef == 'F':
+            transposing_clef = 'G'
+            target_qualifier_index = -2 if key == 'Eb' else -1
+            target_qualifier_index += clef_qualifier_index
+        elif clef == 'G':
+            transposing_clef = 'F'
+            target_qualifier_index = clef_qualifier_index + 2
+        if "transposingClefType" in mscx_contents:
+            mscx_contents = mscx_contents.replace(
+                f"<transposingClefType>{clef}{qualifier}</transposingClefType>",
+                f"<transposingClefType>{transposing_clef}{CLEF_TABLE[target_qualifier_index]}</transposingClefType>")
+        else:
+            mscx_contents = mscx_contents.replace(
+                "<voice>",
+                f"<voice><Clef><concertClefType>{clef}</concertClefType><transposingClefType>{transposing_clef}{CLEF_TABLE[target_qualifier_index]}</transposingClefType></Clef>",
+                1)
+        _generate_pdf(mscx_contents, f"{key}/{part}_{transposing_clef}", key)
 
-    for key in keys:
-        subprocess.run(f"rm {key}/tmp_*", shell=True)
+
+for key in keys:
+    subprocess.run(f"rm {key}/tmp_*", shell=True)
+subprocess.run(f"rm tmp.mscx", shell=True)
