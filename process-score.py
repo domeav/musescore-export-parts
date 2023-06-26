@@ -86,6 +86,8 @@ for key in keys:
         m = re.search('<transposingClefType>([^<]+)</transposingClefType>', mscx_contents)
         if m:
             clef, qualifier = m.group(1)[0], m.group(1)[1:]
+        elif part.lower().startswith('bass'):
+            clef = 'F'
         else:
             clef = 'G'
         clef_qualifier_index = CLEF_TABLE.index(clef[1:])
@@ -97,7 +99,7 @@ for key in keys:
             target_qualifier_index += clef_qualifier_index
         elif clef == 'G':
             transposing_clef = 'F'
-            target_qualifier_index = clef_qualifier_index + 2
+            target_qualifier_index = clef_qualifier_index + 1
         if "transposingClefType" in mscx_contents:
             mscx_contents = mscx_contents.replace(
                 f"<transposingClefType>{clef}{qualifier}</transposingClefType>",
