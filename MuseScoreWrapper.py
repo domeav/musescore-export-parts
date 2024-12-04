@@ -27,7 +27,7 @@ class MuseScoreWrapper:
             self.tmp_dir = TemporaryDirectory(delete=True)
             self.tmp_path = Path(self.tmp_dir.name)
             with zipfile.ZipFile(mscz_path, "r") as mscz:
-                mscx_filenames = [f for f in mscz.namelist() if f.endswith(".mscx")]
+                mscx_filenames = [f for f in mscz.namelist() if f.endswith(".mscx") and '/' not in f]
                 mscz.extractall(self.tmp_path)
         assert len(mscx_filenames) == 1
         self.mscx_name = mscx_filenames[0]
