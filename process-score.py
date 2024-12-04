@@ -29,4 +29,7 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         parts = conductors[key].generate_parts()
         for part, msw in parts.items():
             executor.submit(msw.generate_pdf, f"{key}/{part[0]}_{part[1]}.pdf")
+            executor.submit(
+                msw.generate_pocket_pdf, f"{key}/{part[0]}_{part[1]}_pocket.pdf"
+            )
         executor.submit(conductors[key].generate_pdf, f"{key}/conductor.pdf")

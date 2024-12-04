@@ -56,6 +56,15 @@ class MuseScoreWrapper:
         mscz_path = self._generate_mscz(tmp_out)
         subprocess.run([MUSE_APP, mscz_path, "-o", pdf_path], capture_output=True)
 
+    def generate_pocket_pdf(self, pdf_path):
+        tmp_out = TemporaryDirectory(delete=True)
+        mscz_path = self._generate_mscz(tmp_out)
+        pocket = MuseScoreWrapper(mscz_path, clef=self.clef, key=self.key)
+        style = ET.parse(pocket.tmp_path / "score_style.mss")
+        style.find("./Style/spatium").text = "2.9"
+        style.write(pocket.tmp_path / "score_style.mss")
+        pocket.generate_pdf(pdf_path)
+
     def set_title(self, title):
         self.mscx.find("./Score/Staff/VBox/Text/text").text = title
         self.mscx.write(self.mscx_path)
